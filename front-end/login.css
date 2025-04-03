@@ -1,0 +1,15 @@
+h1 {
+    text-align: center;
+    color: red;
+    font-size: 30px;
+}
+
+.login_blank {
+    width: 200px;
+    height: 30px;
+}
+
+#login_button {
+    width: 200px;
+    height: 30px;
+}
