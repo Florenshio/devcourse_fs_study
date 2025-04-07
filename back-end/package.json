@@ -2,8 +2,8 @@
   "name": "back-end",
   "version": "1.0.0",
   "engines": {
-  "node": "22.14.0"
-},
+    "node": "22.14.0"
+  },
   "description": "node.js back-end study",
   "main": "index.js",
   "scripts": {
@@ -22,5 +22,8 @@
   "bugs": {
     "url": "https://github.com/Florenshio/devcourse_fs_study/issues"
   },
-  "homepage": "https://github.com/Florenshio/devcourse_fs_study#readme"
+  "homepage": "https://github.com/Florenshio/devcourse_fs_study#readme",
+  "dependencies": {
+    "mysql": "^2.18.1"
+  }
 }

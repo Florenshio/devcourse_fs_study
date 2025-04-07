@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+
+<html>
+    <head>
+
+        <title> Tenis Market </title>
+        <meta charset="UTF-8">
+        <link rel="stylesheet" href="main.css">
+
+    </head>
+
+    <body>
+        <div class="welcome_text">
+            <h1 class="title"> Tenis Market </h1>
+            <br>
+            <p class="paragraph">
+                Welcom to Tennis market! <br> Enjoy your shopping.
+            </p>
+            <br>
+            <a class="order_link" href="orderlist">
+                order list
+            </a>
+        </div>
+        <br>
+        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr;">
+            <div class="card" id="redRacket">
+                <img class="card_img" src="./img/redRacket.png">
+                <p class="card_title"> Red Rachet </p>
+                <input class="card_button" type="button" value="order" onclick="location.href='/order?productId=1'">
+            </div>
+            <div class="card" id="blueRacket">
+                <img class="card_img" src="./img/blueRacket.png">
+                <p class="card_title"> Blue Rachet </p>
+                <input class="card_button" type="button" value="order" onclick="location.href='/order?productId=2'">
+            </div>
+            <div class="card" id="blackRacket">
+                <img class="card_img" src="./img/blackRacket.png">
+                <p class="card_title"> Black Rachet </p>
+                <input class="card_button" type="button" value="order" onclick="location.href='/order?productId=3'">
+            </div>
+        </div>
+    </body>
+
+</html>

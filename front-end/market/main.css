@@ -1,0 +1,26 @@
+.welcome_text {
+    text-align: center;
+}
+
+.order_link {
+    text-align: center;
+}
+
+.card {
+    text-align: center;
+}
+
+.card_title {
+    font-size: 20px;
+}
+
+.card_button {
+    font-size: 25px;
+    width: 150px;
+    height: 30px;
+}
+
+.card_img {
+    width: 300px;
+    height: 300px;
+}
