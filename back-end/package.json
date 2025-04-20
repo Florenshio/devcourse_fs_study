@@ -24,6 +24,7 @@
   },
   "homepage": "https://github.com/Florenshio/devcourse_fs_study#readme",
   "dependencies": {
+    "express": "^5.1.0",
     "mysql": "^2.18.1"
   }
 }
