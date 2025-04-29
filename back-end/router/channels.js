@@ -1,56 +1,39 @@
-// channel-api-test.js
+/* mariaDB 적용 및 라우터 적용 진행중... */
 const express = require('express');
+const conn = require('../mariadb');
 const app = express();
 const PORT = 7777;
 
-// 미들웨어 설정
 app.use(express.json());
 
-// Map 객체를 사용한 DB 구현
-const userDB = new Map(); // 사용자 저장소
-let nextUserId = 1; // 사용자 ID 시퀀스
+const getCurrentUserId = async (req) => {
+  try {
+    const email = req.headers['user-email'];
+    if (!email) {
+      return null;
+    }
 
-const channelDB = new Map(); // 채널 저장소
-let nextChannelId = 1; // 채널 ID 시퀀스
-
-// 사용자별 채널 관계 저장 (userId -> channelIds[])
-const userChannelsDB = new Map();
-
-// 테스트용 초기 데이터 추가
-userDB.set(nextUserId, { 
-  id: nextUserId, 
-  userId: 'florenshio', 
-  pwd: '1234', 
-  name: '조영래' 
-});
-nextUserId++;
-
-// 실제 서비스에서는 인증 미들웨어를 통해 로그인된 사용자 정보를 가져와야 함
-// 여기서는 간단히 사용자 ID를 요청에서 가져오는 것으로 가정
-// 실제 구현에서는 세션이나 토큰 기반 인증을 사용해야 함
-const getCurrentUserId = (req) => {
-  // 테스트를 위해 헤더에서 userId를 가져옴
-  // 실제 구현에서는 인증 토큰에서 사용자 ID를 추출해야 함
-  const userId = req.headers['user-id'];
-  if (!userId) {
+    const [users] = await conn.promise().query(
+      'SELECT id FROM Users WHERE email = ?',
+      [email]
+    );
+    
+    if (users.length === 0) {
+      return null;
+    }
+    
+    return users[0].email;
+  } catch (error) {
+    console.error('사용자 ID 조회 오류:', error);
     return null;
   }
-  
-  // userId로 사용자 ID 찾기
-  for (const [id, user] of userDB) {
-    if (user.userId === userId) {
-      return id;
-    }
-  }
-  
-  return null;
 };
 
 // 채널 생성 API - POST /channels
-app.post('/channels', (req, res) => {
+app.post('/channels', async (req, res) => {
   try {
-    const userId = getCurrentUserId(req);
-    if (!userId) {
+    const email = await getCurrentUserId(req);
+    if (!email) {
       return res.status(401).json({
         success: false,
         message: '로그인이 필요합니다'
@@ -68,33 +51,30 @@ app.post('/channels', (req, res) => {
     }
     
     // 사용자가 가진 채널 수 확인 (최대 100개)
-    const userChannels = userChannelsDB.get(userId) || [];
-    if (userChannels.length >= 100) {
+    // 변경: Map 객체 대신 데이터베이스 쿼리 사용
+    const [channels] = await conn.promise().query(
+      'SELECT COUNT(*) as count FROM Channels WHERE userId = ?',
+      [email]
+    );
+    
+    if (channels[0].count >= 100) {
       return res.status(400).json({
         success: false,
         message: '채널은 최대 100개까지만 생성할 수 있습니다'
       });
     }
     
-    // 채널 정보 저장
-    const channelId = nextChannelId++;
-    const channel = {
-      id: channelId,
-      userId,
-      channelTitle,
-      createdAt: new Date()
-    };
-    
-    channelDB.set(channelId, channel);
-    
-    // 사용자-채널 관계 업데이트
-    userChannels.push(channelId);
-    userChannelsDB.set(userId, userChannels);
+    // 채널 정보 저장 - MariaDB 사용
+    // 변경: Map.set() 대신 SQL INSERT 쿼리 사용
+    const [result] = await conn.promise().query(
+      'INSERT INTO Channels (userId, channelTitle, createdAt) VALUES (?, ?, NOW())',
+      [email, channelTitle]
+    );
     
     // 응답
     return res.status(201).json({
       success: true,
-      message: `${channelTitle}님 채널을 응원합니다.`,
+      message: `${channelTitle} 채널을 응원합니다.`,
       redirectTo: '/channels'
     });
   } catch (error) {
@@ -107,9 +87,9 @@ app.post('/channels', (req, res) => {
 });
 
 // 회원 한명이 가진 전체 채널 조회 API - GET /channels
-app.get('/channels', (req, res) => {
+app.get('/channels', async (req, res) => {
   try {
-    const userId = getCurrentUserId(req);
+    const userId = await getCurrentUserId(req);
     if (!userId) {
       return res.status(401).json({
         success: false,
@@ -117,18 +97,12 @@ app.get('/channels', (req, res) => {
       });
     }
     
-    // 사용자가 가진 채널 ID 목록
-    const userChannels = userChannelsDB.get(userId) || [];
-    
-    // 채널 정보 조회
-    const channels = userChannels.map(channelId => {
-      const channel = channelDB.get(channelId);
-      return {
-        id: channel.id,
-        channelTitle: channel.channelTitle,
-        createdAt: channel.createdAt
-      };
-    });
+    // 사용자가 가진 채널 조회 - MariaDB 사용
+    // 변경: Map 객체 대신 데이터베이스 쿼리 사용
+    const [channels] = await conn.promise().query(
+      'SELECT id, channelTitle, createdAt FROM Channels WHERE userId = ?',
+      [userId]
+    );
     
     return res.status(200).json({
       success: true,
@@ -144,9 +118,9 @@ app.get('/channels', (req, res) => {
 });
 
 // 채널 개별 조회 API - GET /channels/:id
-app.get('/channels/:id', (req, res) => {
+app.get('/channels/:id', async (req, res) => {
   try {
-    const userId = getCurrentUserId(req);
+    const userId = await getCurrentUserId(req);
     if (!userId) {
       return res.status(401).json({
         success: false,
@@ -156,15 +130,21 @@ app.get('/channels/:id', (req, res) => {
     
     const channelId = parseInt(req.params.id);
     
-    // 채널 존재 여부 확인
-    if (!channelDB.has(channelId)) {
+    // 채널 조회 - MariaDB 사용
+    // 변경: Map.has() 및 Map.get() 대신 SQL 쿼리 사용
+    const [channels] = await conn.promise().query(
+      'SELECT * FROM Channels WHERE id = ?',
+      [channelId]
+    );
+    
+    if (channels.length === 0) {
       return res.status(404).json({
         success: false,
         message: '채널을 찾을 수 없습니다'
       });
     }
     
-    const channel = channelDB.get(channelId);
+    const channel = channels[0];
     
     // 채널 소유자 확인
     if (channel.userId !== userId) {
@@ -192,9 +172,9 @@ app.get('/channels/:id', (req, res) => {
 });
 
 // 채널 개별 수정 API - PUT /channels/:id
-app.put('/channels/:id', (req, res) => {
+app.put('/channels/:id', async (req, res) => {
   try {
-    const userId = getCurrentUserId(req);
+    const userId = await getCurrentUserId(req);
     if (!userId) {
       return res.status(401).json({
         success: false,
@@ -213,15 +193,21 @@ app.put('/channels/:id', (req, res) => {
       });
     }
     
-    // 채널 존재 여부 확인
-    if (!channelDB.has(channelId)) {
+    // 채널 조회 - MariaDB 사용
+    // 변경: Map.has() 및 Map.get() 대신 SQL 쿼리 사용
+    const [channels] = await conn.promise().query(
+      'SELECT * FROM Channels WHERE id = ?',
+      [channelId]
+    );
+    
+    if (channels.length === 0) {
       return res.status(404).json({
         success: false,
         message: '채널을 찾을 수 없습니다'
       });
     }
     
-    const channel = channelDB.get(channelId);
+    const channel = channels[0];
     
     // 채널 소유자 확인
     if (channel.userId !== userId) {
@@ -234,9 +220,12 @@ app.put('/channels/:id', (req, res) => {
     // 기존 채널 제목 저장
     const oldChannelTitle = channel.channelTitle;
     
-    // 채널 정보 업데이트
-    channel.channelTitle = channelTitle;
-    channelDB.set(channelId, channel);
+    // 채널 정보 업데이트 - MariaDB 사용
+    // 변경: Map.set() 대신 SQL UPDATE 쿼리 사용
+    await conn.promise().query(
+      'UPDATE Channels SET channelTitle = ? WHERE id = ?',
+      [channelTitle, channelId]
+    );
     
     return res.status(200).json({
       success: true,
@@ -252,9 +241,9 @@ app.put('/channels/:id', (req, res) => {
 });
 
 // 채널 개별 삭제 API - DELETE /channels/:id
-app.delete('/channels/:id', (req, res) => {
+app.delete('/channels/:id', async (req, res) => {
   try {
-    const userId = getCurrentUserId(req);
+    const userId = await getCurrentUserId(req);
     if (!userId) {
       return res.status(401).json({
         success: false,
@@ -264,15 +253,21 @@ app.delete('/channels/:id', (req, res) => {
     
     const channelId = parseInt(req.params.id);
     
-    // 채널 존재 여부 확인
-    if (!channelDB.has(channelId)) {
+    // 채널 조회 - MariaDB 사용
+    // 변경: Map.has() 및 Map.get() 대신 SQL 쿼리 사용
+    const [channels] = await conn.promise().query(
+      'SELECT * FROM Channels WHERE id = ?',
+      [channelId]
+    );
+    
+    if (channels.length === 0) {
       return res.status(404).json({
         success: false,
         message: '채널을 찾을 수 없습니다'
       });
     }
     
-    const channel = channelDB.get(channelId);
+    const channel = channels[0];
     
     // 채널 소유자 확인
     if (channel.userId !== userId) {
@@ -282,13 +277,12 @@ app.delete('/channels/:id', (req, res) => {
       });
     }
     
-    // 채널 삭제
-    channelDB.delete(channelId);
-    
-    // 사용자-채널 관계 업데이트
-    const userChannels = userChannelsDB.get(userId) || [];
-    const updatedUserChannels = userChannels.filter(id => id !== channelId);
-    userChannelsDB.set(userId, updatedUserChannels);
+    // 채널 삭제 - MariaDB 사용
+    // 변경: Map.delete() 대신 SQL DELETE 쿼리 사용
+    await conn.promise().query(
+      'DELETE FROM Channels WHERE id = ?',
+      [channelId]
+    );
     
     return res.status(200).json({
       success: true,
@@ -307,4 +301,28 @@ app.delete('/channels/:id', (req, res) => {
 // 서버 시작
 app.listen(PORT, () => {
   console.log(`채널 API 서버가 포트 ${PORT}에서 실행 중입니다.`);
+  
+  // 테이블 생성 확인 및 생성 (애플리케이션 시작 시 한 번만 실행)
+  initDatabase();
 });
+
+// 데이터베이스 초기화 함수 - MariaDB 사용
+// 변경: 테이블이 없을 경우 생성
+async function initDatabase() {
+  try {
+    // Channels 테이블 생성 (없는 경우)
+    await conn.promise().query(`
+      CREATE TABLE IF NOT EXISTS Channels (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        userId INT NOT NULL,
+        channelTitle VARCHAR(100) NOT NULL,
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (userId) REFERENCES Users(id) ON DELETE CASCADE
+      )
+    `);
+    
+    console.log('채널 데이터베이스 테이블이 준비되었습니다.');
+  } catch (error) {
+    console.error('데이터베이스 초기화 오류:', error);
+  }
+}

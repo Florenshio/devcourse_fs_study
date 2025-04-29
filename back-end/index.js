@@ -1,5 +1,3 @@
-let server = require("./server");
-
-
+const server = require("./server");
 
 server.start();

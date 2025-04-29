@@ -1,43 +1,36 @@
-// app.js
 const express = require('express');
-const app = express();
-const PORT = 6666;
-
-// 미들웨어 설정
-app.use(express.json());
-
-// Map 객체를 사용한 DB 구현
-const userDB = new Map(); // 사용자 저장소
-let nextUserId = 1; // 사용자 ID 시퀀스
+const router = express.Router();
+const conn = require('../mariadb');
 
 // 회원 가입 API - POST /join
-app.post('/join', (req, res) => {
+router.post('/join', async (req, res) => {
   try {
-    const { userId, pwd, name } = req.body;
+    const { email, password, name, contact } = req.body;
     
-    // 필수 필드 검증
-    if (!userId || !pwd || !name) {
+    if (!email || !password || !name) {
       return res.status(400).json({
         success: false,
         message: '모든 필수 필드를 입력해주세요'
       });
     }
     
-    // userId 중복 검증
-    for (const [_, user] of userDB) {
-      if (user.userId === userId) {
-        return res.status(409).json({
-          success: false,
-          message: '이미 존재하는 사용자 ID입니다'
-        });
-      }
+    const [existingUsers] = await conn.promise().query(
+      'SELECT * FROM Users WHERE email = ?', 
+      [email]
+    );
+    
+    if (existingUsers.length > 0) {
+      return res.status(409).json({
+        success: false,
+        message: '이미 존재하는 사용자 ID입니다'
+      });
     }
     
-    // 회원 정보 저장
-    const id = nextUserId++;
-    userDB.set(id, { id, userId, pwd, name });
+    const [result] = await conn.promise().query(
+      'INSERT INTO Users (email, password, name, contact) VALUES (?, ?, ?, ?)',
+      [email, password, name, contact]
+    );
     
-    // 응답
     return res.status(201).json({
       success: true,
       message: `${name}님 환영합니다.`,
@@ -53,36 +46,31 @@ app.post('/join', (req, res) => {
 });
 
 // 로그인 API - POST /login
-app.post('/login', (req, res) => {
+router.post('/login', async (req, res) => {
   try {
-    const { userId, pwd } = req.body;
-    
-    // 필수 필드 검증
-    if (!userId || !pwd) {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
       return res.status(400).json({
         success: false,
         message: '아이디와 비밀번호를 모두 입력해주세요'
       });
     }
     
-    // 사용자 조회
-    let user = null;
-    for (const [_, userData] of userDB) {
-      if (userData.userId === userId) {
-        user = userData;
-        break;
-      }
-    }
+    const [users] = await conn.promise().query(
+      'SELECT * FROM Users WHERE email = ?',
+      [email]
+    );
     
-    // 사용자 없음 또는 비밀번호 불일치
-    if (!user || user.pwd !== pwd) {
+    if (users.length === 0 || users[0].password !== password) {
       return res.status(401).json({
         success: false,
         message: '아이디 또는 비밀번호가 일치하지 않습니다'
       });
     }
     
-    // 로그인 성공
+    const user = users[0];
+    
     return res.status(200).json({
       success: true,
       message: `${user.name}님 환영합니다.`,
@@ -98,24 +86,28 @@ app.post('/login', (req, res) => {
 });
 
 // 사용자 정보 조회 API - GET /users/:id
-app.get('/users/:id', (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     
-    if (!userDB.has(id)) {
+    const [users] = await conn.promise().query(
+      'SELECT * FROM Users WHERE id = ?',
+      [id]
+    );
+    
+    if (users.length === 0) {
       return res.status(404).json({
         success: false,
         message: '사용자를 찾을 수 없습니다'
       });
     }
     
-    const user = userDB.get(id);
+    const user = users[0];
     
-    // 사용자 정보 반환 (비밀번호 제외)
     return res.status(200).json({
       success: true,
       data: {
-        userId: user.userId,
+        email: user.email,
         name: user.name
       }
     });
@@ -129,21 +121,28 @@ app.get('/users/:id', (req, res) => {
 });
 
 // 회원 탈퇴 API - DELETE /users/:id
-app.delete('/users/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     
-    if (!userDB.has(id)) {
+    const [users] = await conn.promise().query(
+      'SELECT * FROM Users WHERE id = ?',
+      [id]
+    );
+    
+    if (users.length === 0) {
       return res.status(404).json({
         success: false,
         message: '사용자를 찾을 수 없습니다'
       });
     }
     
-    const user = userDB.get(id);
-    
-    // 사용자 삭제
-    userDB.delete(id);
+    const user = users[0];
+
+    await conn.promise().query(
+      'DELETE FROM Users WHERE id = ?',
+      [id]
+    );
     
     return res.status(200).json({
       success: true,
@@ -159,16 +158,4 @@ app.delete('/users/:id', (req, res) => {
   }
 });
 
-// 서버 시작
-app.listen(PORT, () => {
-  console.log(`서버가 포트 ${PORT}에서 실행 중입니다.`);
-});
-
-// 테스트용 초기 데이터 추가
-userDB.set(nextUserId, { 
-  id: nextUserId, 
-  userId: 'test', 
-  pwd: 'test123', 
-  name: '테스트 사용자' 
-});
-nextUserId++;
+module.exports = router;
