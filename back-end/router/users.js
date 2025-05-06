@@ -1,6 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const conn = require('../mariadb');
+const jwt = require('jsonwebtoken');
+const dotenv = require('dotenv');
+dotenv.config();
 
 // 회원 가입 API - POST /join
 router.post('/join', async (req, res) => {
@@ -70,12 +73,27 @@ router.post('/login', async (req, res) => {
     }
     
     const user = users[0];
-    
+
+    const token = jwt.sign({ email: user.email,
+                             name: user.name,
+                             }, 
+                            process.env.JWT_SECRET, 
+                            { expiresIn: '1m',
+                              algorithm: 'HS256',
+                              issuer: 'youngrae.cho',
+                              audience: 'youngrae.cho',
+                             });
+
+    res.cookie("jwt", token, {
+      httpOnly: true
+    })
+
     return res.status(200).json({
       success: true,
       message: `${user.name}님 환영합니다.`,
       redirectTo: '/main'
     });
+
   } catch (error) {
     console.error('로그인 오류:', error);
     return res.status(500).json({
